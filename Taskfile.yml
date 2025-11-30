@@ -102,6 +102,7 @@ tasks:
       - 'echo "  Auth:      https://mcp-auth.127-0-0-1.sslip.io"'
       - 'echo "  Keycloak:  https://keycloak.127-0-0-1.sslip.io"'
       - 'echo "  Metrics:   https://mcp-metrics.127-0-0-1.sslip.io"'
+      - 'echo "  Agents:    https://agents.127-0-0-1.sslip.io"'
       - 'echo "  ArgoCD:    https://argocd.127-0-0-1.sslip.io"'
       - 'echo "  Gitea:     https://gitea.127-0-0-1.sslip.io"'
     silent: false

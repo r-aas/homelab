@@ -13,6 +13,7 @@ resources:
   - metrics-service.yaml
   - auth-server.yaml
   - registry.yaml
+  - agent-gateway.yaml
   - ingress.yaml
 
 commonLabels:

@@ -1,0 +1,79 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-gateway
+  namespace: homelab
+  labels:
+    app: agent-gateway
+    app.kubernetes.io/name: agent-gateway
+    app.kubernetes.io/part-of: homelab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-gateway
+  template:
+    metadata:
+      labels:
+        app: agent-gateway
+        app.kubernetes.io/name: agent-gateway
+        app.kubernetes.io/part-of: homelab
+    spec:
+      containers:
+        - name: agent-gateway
+          image: registry.localhost:5001/mcp-gateway-registry/agent-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AGENT_GATEWAY_HOST
+              value: "0.0.0.0"
+            - name: AGENT_GATEWAY_PORT
+              value: "8080"
+            - name: AGENT_GATEWAY_MCP_REGISTRY_URL
+              value: "http://registry:7860"
+            - name: AGENT_GATEWAY_OLLAMA_HOST
+              value: "http://host.docker.internal:11434"
+            - name: AGENT_GATEWAY_DATA_DIR
+              value: "/data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-gateway
+  namespace: homelab
+  labels:
+    app: agent-gateway
+spec:
+  selector:
+    app: agent-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http

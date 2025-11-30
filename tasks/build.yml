@@ -46,9 +46,22 @@ tasks:
       - sh: test -d {{.REFERENCE_DIR}}
         msg: "Reference directory not found: {{.REFERENCE_DIR}}"
 
+  agent-gateway:
+    desc: Build agent-gateway image
+    dir: "{{.ROOT_DIR}}/services/agent-gateway"
+    cmds:
+      - echo "Building agent-gateway..."
+      - docker build -t {{.IMAGE_PREFIX}}/agent-gateway:latest .
+      - docker push {{.IMAGE_PREFIX}}/agent-gateway:latest
+      - echo "✓ agent-gateway built and pushed"
+    sources:
+      - "{{.ROOT_DIR}}/services/agent-gateway/Dockerfile"
+      - "{{.ROOT_DIR}}/services/agent-gateway/src/**/*.py"
+
   all:
     desc: Build all images in parallel
     deps:
       - registry
       - auth
       - metrics
+      - agent-gateway
