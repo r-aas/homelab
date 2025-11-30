@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-db
+  namespace: homelab
+  labels:
+    app: metrics-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metrics-db
+  template:
+    metadata:
+      labels:
+        app: metrics-db
+    spec:
+      initContainers:
+        - name: init-db
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache sqlite
+              mkdir -p /var/lib/sqlite
+              sqlite3 /var/lib/sqlite/metrics.db 'CREATE TABLE IF NOT EXISTS _health (id INTEGER);'
+          volumeMounts:
+            - name: metrics-db-data
+              mountPath: /var/lib/sqlite
+      containers:
+        - name: sqlite
+          image: alpine:latest
+          command: ["tail", "-f", "/dev/null"]
+          volumeMounts:
+            - name: metrics-db-data
+              mountPath: /var/lib/sqlite
+          livenessProbe:
+            exec:
+              command: ["sqlite3", "/var/lib/sqlite/metrics.db", ".tables"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: metrics-db-data
+          persistentVolumeClaim:
+            claimName: metrics-db-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: metrics-db-pvc
+  namespace: homelab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

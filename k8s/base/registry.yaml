@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: homelab
+  labels:
+    app: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      initContainers:
+        - name: download-model
+          image: python:3.12-slim
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install sentence-transformers --quiet
+              mkdir -p /models/all-MiniLM-L6-v2
+              python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2').save('/models/all-MiniLM-L6-v2')"
+          volumeMounts:
+            - name: models-data
+              mountPath: /models
+      containers:
+        - name: registry
+          image: registry.localhost:5001/mcp-gateway-registry/registry:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 7860
+              name: http
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: SECRET_KEY
+            - name: ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: ADMIN_USER
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: ADMIN_PASSWORD
+            - name: AUTH_SERVER_URL
+              value: "http://auth-server:8888"
+            - name: AUTH_SERVER_EXTERNAL_URL
+              value: "https://mcp-auth.127-0-0-1.sslip.io"
+            - name: AUTH_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: AUTH_PROVIDER
+            - name: KEYCLOAK_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_ENABLED
+            - name: KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_URL
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_REALM
+            - name: KEYCLOAK_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_CLIENT_ID
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_CLIENT_SECRET
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: KEYCLOAK_M2M_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_M2M_CLIENT_ID
+            - name: KEYCLOAK_M2M_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_M2M_CLIENT_SECRET
+            - name: METRICS_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: METRICS_SERVICE_URL
+            - name: METRICS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: METRICS_API_KEY_REGISTRY
+            - name: METRICS_API_KEY_NGINX
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: METRICS_API_KEY_REGISTRY
+            - name: HEALTH_CHECK_INTERVAL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: HEALTH_CHECK_INTERVAL_SECONDS
+          volumeMounts:
+            - name: models-data
+              mountPath: /app/registry/models
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 7860
+            initialDelaySeconds: 120
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7860
+            initialDelaySeconds: 60
+            periodSeconds: 10
+      volumes:
+        - name: models-data
+          persistentVolumeClaim:
+            claimName: registry-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: homelab
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: homelab
+spec:
+  selector:
+    app: registry
+  ports:
+    - port: 7860
+      targetPort: 7860

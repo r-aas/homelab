@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-service
+  namespace: homelab
+  labels:
+    app: metrics-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metrics-service
+  template:
+    metadata:
+      labels:
+        app: metrics-service
+    spec:
+      containers:
+        - name: metrics-service
+          image: registry.localhost:5001/mcp-gateway-registry/metrics-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8890
+              name: http
+            - containerPort: 9465
+              name: prometheus
+          env:
+            - name: METRICS_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: METRICS_SERVICE_PORT
+            - name: METRICS_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: METRICS_SERVICE_HOST
+            - name: SQLITE_DB_PATH
+              value: /var/lib/sqlite/metrics.db
+            - name: METRICS_RETENTION_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: METRICS_RETENTION_DAYS
+            - name: METRICS_API_KEY_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: METRICS_API_KEY_AUTH_SERVER
+            - name: METRICS_API_KEY_REGISTRY
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: METRICS_API_KEY_REGISTRY
+            - name: METRICS_API_KEY_MCPGW
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: METRICS_API_KEY_MCPGW_SERVER
+            - name: OTEL_SERVICE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: OTEL_SERVICE_NAME
+            - name: OTEL_PROMETHEUS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: OTEL_PROMETHEUS_ENABLED
+            - name: OTEL_PROMETHEUS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: OTEL_PROMETHEUS_PORT
+            - name: METRICS_RATE_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: METRICS_RATE_LIMIT
+          volumeMounts:
+            - name: metrics-db
+              mountPath: /var/lib/sqlite
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8890
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8890
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: metrics-db
+          persistentVolumeClaim:
+            claimName: metrics-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-service
+  namespace: homelab
+spec:
+  selector:
+    app: metrics-service
+  ports:
+    - name: http
+      port: 8890
+      targetPort: 8890
+    - name: prometheus
+      port: 9465
+      targetPort: 9465

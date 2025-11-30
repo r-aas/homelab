@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-server
+  namespace: homelab
+  labels:
+    app: auth-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-server
+  template:
+    metadata:
+      labels:
+        app: auth-server
+    spec:
+      containers:
+        - name: auth-server
+          image: registry.localhost:5001/mcp-gateway-registry/auth-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8888
+          env:
+            - name: REGISTRY_URL
+              value: "http://registry:7860"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: SECRET_KEY
+            - name: ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: ADMIN_USER
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: ADMIN_PASSWORD
+            # Keycloak
+            - name: AUTH_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: AUTH_PROVIDER
+            - name: KEYCLOAK_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_ENABLED
+            - name: KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_URL
+            - name: KEYCLOAK_EXTERNAL_URL
+              value: "https://keycloak.127-0-0-1.sslip.io"
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_REALM
+            - name: KEYCLOAK_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: KEYCLOAK_CLIENT_ID
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_CLIENT_SECRET
+            - name: KEYCLOAK_M2M_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_M2M_CLIENT_ID
+            - name: KEYCLOAK_M2M_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: KEYCLOAK_M2M_CLIENT_SECRET
+            # Metrics
+            - name: METRICS_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: homelab-config
+                  key: METRICS_SERVICE_URL
+            - name: METRICS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-secrets
+                  key: METRICS_API_KEY_AUTH_SERVER
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-server
+  namespace: homelab
+spec:
+  selector:
+    app: auth-server
+  ports:
+    - port: 8888
+      targetPort: 8888
