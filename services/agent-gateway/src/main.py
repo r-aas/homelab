@@ -1,6 +1,7 @@
 """Agent Gateway - A2A Agent Registry with MCP integration and local model support."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
@@ -14,6 +15,18 @@ from mcp_client import mcp_client
 from models import AgentCard, AgentInfo, AgentRegistrationRequest, DiscoveryQuery
 from ollama_service import ollama_service
 
+# Initialize OpenLLMetry tracing before other imports that might be instrumented
+if settings.tracing_enabled:
+    from traceloop.sdk import Traceloop
+
+    # Set OTLP endpoint via environment (traceloop uses this)
+    os.environ.setdefault("TRACELOOP_BASE_URL", settings.otlp_endpoint)
+
+    Traceloop.init(
+        app_name=settings.service_name,
+        disable_batch=False,  # Batch traces for efficiency
+    )
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -25,6 +38,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     logger.info("Agent Gateway starting up...")
+
+    # Log tracing status
+    if settings.tracing_enabled:
+        logger.info(f"OpenLLMetry tracing enabled, sending to {settings.otlp_endpoint}")
+    else:
+        logger.info("Tracing disabled")
 
     # Initialize agent service
     agent_service.initialize()
@@ -71,6 +90,7 @@ async def health():
         "ollama": "connected" if ollama_available else "unavailable",
         "mcp_registry": "connected" if mcp_available else "unavailable",
         "agents": len(agent_service.list_agents()),
+        "tracing": "enabled" if settings.tracing_enabled else "disabled",
     }
 
 

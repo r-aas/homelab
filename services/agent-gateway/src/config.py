@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # Storage
     data_dir: str = "/data"
 
+    # Observability (OpenLLMetry)
+    otlp_endpoint: str = "http://jaeger:4318"  # OTLP HTTP endpoint
+    tracing_enabled: bool = True
+    service_name: str = "agent-gateway"
+
     model_config = {"env_prefix": "AGENT_GATEWAY_"}
 
 

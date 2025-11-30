@@ -38,6 +38,10 @@ spec:
               value: "http://10.0.0.158:11434"
             - name: AGENT_GATEWAY_DATA_DIR
               value: "/data"
+            - name: AGENT_GATEWAY_OTLP_ENDPOINT
+              value: "http://jaeger:4318"
+            - name: AGENT_GATEWAY_TRACING_ENABLED
+              value: "true"
           volumeMounts:
             - name: data
               mountPath: /data
@@ -78,3 +82,20 @@ spec:
     - port: 8080
       targetPort: 8080
       name: http
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: agent-gateway
+  namespace: homelab
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`agents.127-0-0-1.sslip.io`)
+      kind: Rule
+      services:
+        - name: agent-gateway
+          port: 8080
+  tls:
+    secretName: wildcard-tls

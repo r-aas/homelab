@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir \
     pydantic>=2.10.0 \
     pydantic-settings>=2.6.0 \
     httpx>=0.28.0 \
-    ollama>=0.4.0
+    ollama>=0.4.0 \
+    traceloop-sdk>=0.34.0 \
+    opentelemetry-instrumentation-httpx>=0.48b0
 
 # Copy source
 COPY src/ ./src/

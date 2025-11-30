@@ -36,3 +36,9 @@ tasks:
     cmds:
       - kubectl logs -n {{.NAMESPACE}} -l app=agent-gateway -f --tail=100
     silent: false
+
+  jaeger:
+    desc: Tail jaeger logs
+    cmds:
+      - kubectl logs -n {{.NAMESPACE}} -l app=jaeger -f --tail=100
+    silent: false
