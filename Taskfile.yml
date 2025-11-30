@@ -103,6 +103,7 @@ tasks:
       - 'echo "  Keycloak:  https://keycloak.127-0-0-1.sslip.io"'
       - 'echo "  Metrics:   https://mcp-metrics.127-0-0-1.sslip.io"'
       - 'echo "  ArgoCD:    https://argocd.127-0-0-1.sslip.io"'
+      - 'echo "  Gitea:     https://gitea.127-0-0-1.sslip.io"'
     silent: false
 
   wait:ready:
@@ -189,9 +190,22 @@ tasks:
 
   # === GitOps ===
   push:
-    desc: Commit and push changes (triggers ArgoCD sync)
+    desc: Commit and push to Gitea (triggers ArgoCD sync)
     cmds:
       - git add -A
       - git commit -m "{{.CLI_ARGS}}" || echo "Nothing to commit"
-      - git push
-      - echo "✓ Pushed - ArgoCD will sync automatically"
+      - git push origin main
+      - echo "✓ Pushed to Gitea - ArgoCD will sync automatically"
+
+  mirror:
+    desc: Push to GitHub mirror
+    cmds:
+      - git push github main
+      - echo "✓ Mirrored to GitHub"
+
+  push:all:
+    desc: Push to both Gitea and GitHub
+    cmds:
+      - task: push
+        vars: { CLI_ARGS: "{{.CLI_ARGS}}" }
+      - task: mirror
