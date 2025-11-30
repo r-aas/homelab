@@ -8,7 +8,7 @@ spec:
   source:
     # For now, use a GitHub repo - we'll push homelab there
     # Or use Gitea once set up
-    repoURL: https://github.com/russellcox/homelab.git
+    repoURL: https://github.com/r-aas/homelab.git
     targetRevision: HEAD
     path: k8s/base
   destination:
