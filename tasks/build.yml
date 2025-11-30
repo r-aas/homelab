@@ -1,0 +1,54 @@
+version: '3'
+
+tasks:
+  registry:
+    desc: Build registry image
+    dir: "{{.REFERENCE_DIR}}"
+    cmds:
+      - echo "Building registry..."
+      - docker build -t {{.IMAGE_PREFIX}}/registry:latest -f docker/Dockerfile.registry .
+      - docker push {{.IMAGE_PREFIX}}/registry:latest
+      - echo "✓ registry built and pushed"
+    sources:
+      - "{{.REFERENCE_DIR}}/docker/Dockerfile.registry"
+      - "{{.REFERENCE_DIR}}/registry/**/*.py"
+    preconditions:
+      - sh: test -d {{.REFERENCE_DIR}}
+        msg: "Reference directory not found: {{.REFERENCE_DIR}}"
+
+  auth:
+    desc: Build auth-server image
+    dir: "{{.REFERENCE_DIR}}"
+    cmds:
+      - echo "Building auth-server..."
+      - docker build -t {{.IMAGE_PREFIX}}/auth-server:latest -f docker/Dockerfile.auth .
+      - docker push {{.IMAGE_PREFIX}}/auth-server:latest
+      - echo "✓ auth-server built and pushed"
+    sources:
+      - "{{.REFERENCE_DIR}}/docker/Dockerfile.auth"
+      - "{{.REFERENCE_DIR}}/auth_server/**/*.py"
+    preconditions:
+      - sh: test -d {{.REFERENCE_DIR}}
+        msg: "Reference directory not found: {{.REFERENCE_DIR}}"
+
+  metrics:
+    desc: Build metrics-service image
+    dir: "{{.REFERENCE_DIR}}"
+    cmds:
+      - echo "Building metrics-service..."
+      - docker build -t {{.IMAGE_PREFIX}}/metrics-service:latest -f metrics-service/Dockerfile .
+      - docker push {{.IMAGE_PREFIX}}/metrics-service:latest
+      - echo "✓ metrics-service built and pushed"
+    sources:
+      - "{{.REFERENCE_DIR}}/metrics-service/Dockerfile"
+      - "{{.REFERENCE_DIR}}/metrics-service/**/*.py"
+    preconditions:
+      - sh: test -d {{.REFERENCE_DIR}}
+        msg: "Reference directory not found: {{.REFERENCE_DIR}}"
+
+  all:
+    desc: Build all images in parallel
+    deps:
+      - registry
+      - auth
+      - metrics

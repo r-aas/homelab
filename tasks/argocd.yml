@@ -1,0 +1,42 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install ArgoCD
+    cmds:
+      - kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+      - kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+      - kubectl patch configmap argocd-cmd-params-cm -n argocd --type merge -p '{"data":{"server.insecure":"true"}}'
+      - kubectl apply -f k8s/argocd/ingress.yaml
+      - kubectl rollout restart deployment argocd-server -n argocd
+      - kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=120s
+      - echo "✓ ArgoCD installed at https://argocd.127-0-0-1.sslip.io"
+    status:
+      - kubectl get deployment argocd-server -n argocd 2>/dev/null
+
+  password:
+    desc: Get ArgoCD admin password
+    cmds:
+      - kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | /usr/bin/base64 -d && echo
+    silent: false
+
+  app:
+    desc: Create/update ArgoCD Application for homelab
+    cmds:
+      - kubectl apply -f k8s/argocd/application.yaml
+      - echo "✓ Application created - check https://argocd.127-0-0-1.sslip.io"
+
+  sync:
+    desc: Force sync the homelab application
+    cmds:
+      - kubectl patch application homelab -n argocd --type merge -p '{"operation":{"initiatedBy":{"username":"task"},"sync":{"prune":true}}}'
+      - echo "Sync triggered"
+
+  status:
+    desc: Show ArgoCD application status
+    cmds:
+      - kubectl get applications -n argocd
+      - echo ""
+      - kubectl get application homelab -n argocd -o jsonpath='{.status.sync.status}' && echo " (sync)"
+      - kubectl get application homelab -n argocd -o jsonpath='{.status.health.status}' && echo " (health)"
+    silent: false

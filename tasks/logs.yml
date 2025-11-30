@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Tail logs from all pods
+    cmds:
+      - kubectl logs -n {{.NAMESPACE}} -l app.kubernetes.io/part-of={{.NAMESPACE}} -f --prefix --tail=100
+    silent: false
+
+  registry:
+    desc: Tail registry logs
+    cmds:
+      - kubectl logs -n {{.NAMESPACE}} -l app=registry -f --tail=100
+    silent: false
+
+  auth:
+    desc: Tail auth-server logs
+    cmds:
+      - kubectl logs -n {{.NAMESPACE}} -l app=auth-server -f --tail=100
+    silent: false
+
+  keycloak:
+    desc: Tail keycloak logs
+    cmds:
+      - kubectl logs -n {{.NAMESPACE}} -l app=keycloak -f --tail=100
+    silent: false
+
+  metrics:
+    desc: Tail metrics-service logs
+    cmds:
+      - kubectl logs -n {{.NAMESPACE}} -l app=metrics-service -f --tail=100
+    silent: false

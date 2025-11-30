@@ -6,10 +6,8 @@ metadata:
 spec:
   project: default
   source:
-    # For now, use a GitHub repo - we'll push homelab there
-    # Or use Gitea once set up
-    repoURL: https://github.com/r-aas/homelab.git
-    targetRevision: HEAD
+    repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitea/homelab.git
+    targetRevision: main
     path: k8s/base
   destination:
     server: https://kubernetes.default.svc

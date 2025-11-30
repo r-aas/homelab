@@ -1,0 +1,47 @@
+version: '3'
+
+tasks:
+  create:
+    desc: Create k3d cluster with Traefik ingress
+    summary: |
+      Creates a k3d cluster with:
+      - Traefik ingress controller
+      - Local container registry at registry.localhost:5001
+      - Ports 80/443 exposed for ingress
+    cmds:
+      - cmd: |
+          k3d cluster create {{.CLUSTER_NAME}} \
+            --api-port 6550 \
+            --port "80:80@loadbalancer" \
+            --port "443:443@loadbalancer" \
+            --registry-create {{.REGISTRY_NAME}}:0.0.0.0:{{.REGISTRY_PORT}} \
+            --k3s-arg "--disable=traefik@server:0" \
+            --wait
+        silent: false
+      - kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
+      - helm repo add traefik https://traefik.github.io/charts 2>/dev/null || true
+      - helm repo update traefik
+      - helm upgrade --install traefik traefik/traefik --namespace kube-system --set ingressClass.enabled=true --set ingressClass.isDefaultClass=true --skip-crds --wait
+    status:
+      - k3d cluster list | grep -q {{.CLUSTER_NAME}}
+
+  delete:
+    desc: Delete k3d cluster
+    prompt: This will delete the {{.CLUSTER_NAME}} cluster. Continue?
+    cmds:
+      - k3d cluster delete {{.CLUSTER_NAME}}
+      - k3d registry delete {{.REGISTRY_NAME}} 2>/dev/null || true
+    ignore_error: true
+
+  start:
+    desc: Start existing cluster
+    cmds:
+      - k3d cluster start {{.CLUSTER_NAME}}
+    preconditions:
+      - sh: k3d cluster list | grep -q {{.CLUSTER_NAME}}
+        msg: "Cluster {{.CLUSTER_NAME}} does not exist. Run 'task cluster:create' first."
+
+  stop:
+    desc: Stop cluster without deleting
+    cmds:
+      - k3d cluster stop {{.CLUSTER_NAME}}

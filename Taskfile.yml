@@ -4,12 +4,13 @@ version: '3'
 set: [errexit, pipefail]
 shopt: [globstar]
 
-# Suppress command echo by default, show output only
+# Suppress command echo by default
 silent: true
 
 # Output mode: prefixed for parallel tasks
 output: prefixed
 
+# Global variables available to all included taskfiles
 vars:
   CLUSTER_NAME: homelab
   NAMESPACE: homelab
@@ -27,6 +28,30 @@ env:
 # Load secrets from .env if it exists
 dotenv: ['.env']
 
+# Include modular taskfiles
+includes:
+  cluster:
+    taskfile: ./tasks/cluster.yml
+    aliases: [c]
+  build:
+    taskfile: ./tasks/build.yml
+    aliases: [b]
+  secrets:
+    taskfile: ./tasks/secrets.yml
+    aliases: [s]
+  deploy:
+    taskfile: ./tasks/deploy.yml
+    aliases: [d]
+  logs:
+    taskfile: ./tasks/logs.yml
+    aliases: [l]
+  test:
+    taskfile: ./tasks/test.yml
+    aliases: [t]
+  argocd:
+    taskfile: ./tasks/argocd.yml
+    aliases: [a]
+
 tasks:
   # === Default ===
   default:
@@ -35,194 +60,7 @@ tasks:
       - task --list
     silent: false
 
-  # === Cluster Lifecycle ===
-  cluster:create:
-    desc: Create k3d cluster with Traefik ingress
-    summary: |
-      Creates a k3d cluster with:
-      - Traefik ingress controller
-      - Local container registry at registry.localhost:5001
-      - Ports 80/443 exposed for ingress
-    cmds:
-      - cmd: |
-          k3d cluster create {{.CLUSTER_NAME}} \
-            --api-port 6550 \
-            --port "80:80@loadbalancer" \
-            --port "443:443@loadbalancer" \
-            --registry-create {{.REGISTRY_NAME}}:0.0.0.0:{{.REGISTRY_PORT}} \
-            --k3s-arg "--disable=traefik@server:0" \
-            --wait
-        silent: false
-      - kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
-      - helm repo add traefik https://traefik.github.io/charts 2>/dev/null || true
-      - helm repo update traefik
-      - helm upgrade --install traefik traefik/traefik --namespace kube-system --set ingressClass.enabled=true --set ingressClass.isDefaultClass=true --skip-crds --wait
-    status:
-      - k3d cluster list | grep -q {{.CLUSTER_NAME}}
-
-  cluster:delete:
-    desc: Delete k3d cluster
-    prompt: This will delete the {{.CLUSTER_NAME}} cluster. Continue?
-    cmds:
-      - k3d cluster delete {{.CLUSTER_NAME}}
-      - k3d registry delete {{.REGISTRY_NAME}} 2>/dev/null || true
-    ignore_error: true
-
-  cluster:start:
-    desc: Start existing cluster
-    cmds:
-      - k3d cluster start {{.CLUSTER_NAME}}
-    preconditions:
-      - sh: k3d cluster list | grep -q {{.CLUSTER_NAME}}
-        msg: "Cluster {{.CLUSTER_NAME}} does not exist. Run 'task cluster:create' first."
-
-  cluster:stop:
-    desc: Stop cluster without deleting
-    cmds:
-      - k3d cluster stop {{.CLUSTER_NAME}}
-
-  # === Image Build ===
-  build:registry:
-    desc: Build registry image
-    dir: "{{.REFERENCE_DIR}}"
-    cmds:
-      - echo "Building registry..."
-      - docker build -t {{.IMAGE_PREFIX}}/registry:latest -f docker/Dockerfile.registry .
-      - docker push {{.IMAGE_PREFIX}}/registry:latest
-      - echo "✓ registry built and pushed"
-    sources:
-      - "{{.REFERENCE_DIR}}/docker/Dockerfile.registry"
-      - "{{.REFERENCE_DIR}}/registry/**/*.py"
-    preconditions:
-      - sh: test -d {{.REFERENCE_DIR}}
-        msg: "Reference directory not found: {{.REFERENCE_DIR}}"
-
-  build:auth:
-    desc: Build auth-server image
-    dir: "{{.REFERENCE_DIR}}"
-    cmds:
-      - echo "Building auth-server..."
-      - docker build -t {{.IMAGE_PREFIX}}/auth-server:latest -f docker/Dockerfile.auth .
-      - docker push {{.IMAGE_PREFIX}}/auth-server:latest
-      - echo "✓ auth-server built and pushed"
-    sources:
-      - "{{.REFERENCE_DIR}}/docker/Dockerfile.auth"
-      - "{{.REFERENCE_DIR}}/auth_server/**/*.py"
-    preconditions:
-      - sh: test -d {{.REFERENCE_DIR}}
-        msg: "Reference directory not found: {{.REFERENCE_DIR}}"
-
-  build:metrics:
-    desc: Build metrics-service image
-    dir: "{{.REFERENCE_DIR}}"
-    cmds:
-      - echo "Building metrics-service..."
-      - docker build -t {{.IMAGE_PREFIX}}/metrics-service:latest -f metrics-service/Dockerfile .
-      - docker push {{.IMAGE_PREFIX}}/metrics-service:latest
-      - echo "✓ metrics-service built and pushed"
-    sources:
-      - "{{.REFERENCE_DIR}}/metrics-service/Dockerfile"
-      - "{{.REFERENCE_DIR}}/metrics-service/**/*.py"
-    preconditions:
-      - sh: test -d {{.REFERENCE_DIR}}
-        msg: "Reference directory not found: {{.REFERENCE_DIR}}"
-
-  build:all:
-    desc: Build all images in parallel
-    deps:
-      - build:registry
-      - build:auth
-      - build:metrics
-
-  # === Secrets ===
-  secrets:generate:
-    desc: Generate random secrets to .env file
-    cmds:
-      - |
-        cat > .env << 'EOFENV'
-        # Homelab Secrets (generated $(date +%Y-%m-%d))
-        SECRET_KEY=$(openssl rand -base64 32)
-        ADMIN_USER=admin
-        ADMIN_PASSWORD=$(openssl rand -base64 16)
-        KEYCLOAK_ADMIN=admin
-        KEYCLOAK_ADMIN_PASSWORD=$(openssl rand -base64 16)
-        KEYCLOAK_CLIENT_SECRET=$(openssl rand -base64 32)
-        KEYCLOAK_M2M_CLIENT_ID=mcp-gateway-m2m
-        KEYCLOAK_M2M_CLIENT_SECRET=$(openssl rand -base64 32)
-        KEYCLOAK_DB_PASSWORD=$(openssl rand -base64 16)
-        METRICS_API_KEY_AUTH_SERVER=$(openssl rand -base64 32)
-        METRICS_API_KEY_REGISTRY=$(openssl rand -base64 32)
-        METRICS_API_KEY_MCPGW_SERVER=$(openssl rand -base64 32)
-        EOFENV
-      - echo "✓ Generated .env with random secrets"
-    status:
-      - test -f .env
-    generates:
-      - .env
-
-  secrets:apply:
-    desc: Create k8s secret from .env file
-    cmds:
-      - kubectl create secret generic homelab-secrets --from-env-file=.env -n {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
-      - echo "✓ Secrets applied to cluster"
-    preconditions:
-      - sh: test -f .env
-        msg: ".env file not found. Run 'task secrets:generate' first."
-      - sh: kubectl get namespace {{.NAMESPACE}} 2>/dev/null
-        msg: "Namespace {{.NAMESPACE}} not found. Deploy namespace first."
-
-  secrets:show:
-    desc: Show current secret keys (not values)
-    cmds:
-      - kubectl get secret homelab-secrets -n {{.NAMESPACE}} -o jsonpath='{.data}' | jq -r 'keys[]'
-
-  # === Deploy ===
-  deploy:
-    desc: Deploy homelab to k3d
-    deps:
-      - cluster:create
-    cmds:
-      - task: secrets:generate
-      - kubectl apply -f k8s/base/namespace.yaml
-      - task: secrets:apply
-      - kubectl apply -k k8s/base
-      - task: wait:ready
-      - task: test
-    sources:
-      - k8s/base/*.yaml
-
-  deploy:dry-run:
-    desc: Preview what would be deployed
-    cmds:
-      - kubectl apply -k k8s/base --dry-run=client -o yaml
-    silent: false
-
-  undeploy:
-    desc: Remove homelab from cluster
-    prompt: This will delete all resources in {{.NAMESPACE}}. Continue?
-    cmds:
-      - kubectl delete -k k8s/base --ignore-not-found
-    ignore_error: true
-
-  redeploy:
-    desc: Rebuild, push, and restart deployments
-    cmds:
-      - task: build:all
-      - kubectl rollout restart deployment -n {{.NAMESPACE}}
-      - task: wait:ready
-      - task: test
-
-  rebuild:
-    desc: Pull latest reference, rebuild all images, redeploy
-    cmds:
-      - echo "Pulling latest mcp-gateway-registry..."
-      - git -C {{.REFERENCE_DIR}} pull --ff-only
-      - task: build:all
-      - kubectl rollout restart deployment -n {{.NAMESPACE}}
-      - task: wait:ready
-      - task: test
-
-  # === Orchestration ===
+  # === Orchestration (top-level convenience tasks) ===
   up:
     desc: Full platform startup (cluster + build + deploy)
     summary: |
@@ -240,7 +78,7 @@ tasks:
   down:
     desc: Full platform shutdown
     cmds:
-      - task: undeploy
+      - task: deploy:undeploy
       - task: cluster:stop
 
   restart:
@@ -264,36 +102,7 @@ tasks:
       - 'echo "  Auth:      https://mcp-auth.127-0-0-1.sslip.io"'
       - 'echo "  Keycloak:  https://keycloak.127-0-0-1.sslip.io"'
       - 'echo "  Metrics:   https://mcp-metrics.127-0-0-1.sslip.io"'
-    silent: false
-
-  logs:
-    desc: Tail logs from all pods
-    cmds:
-      - kubectl logs -n {{.NAMESPACE}} -l app.kubernetes.io/part-of={{.NAMESPACE}} -f --prefix --tail=100
-    silent: false
-
-  logs:registry:
-    desc: Tail registry logs
-    cmds:
-      - kubectl logs -n {{.NAMESPACE}} -l app=registry -f --tail=100
-    silent: false
-
-  logs:auth:
-    desc: Tail auth-server logs
-    cmds:
-      - kubectl logs -n {{.NAMESPACE}} -l app=auth-server -f --tail=100
-    silent: false
-
-  logs:keycloak:
-    desc: Tail keycloak logs
-    cmds:
-      - kubectl logs -n {{.NAMESPACE}} -l app=keycloak -f --tail=100
-    silent: false
-
-  logs:metrics:
-    desc: Tail metrics-service logs
-    cmds:
-      - kubectl logs -n {{.NAMESPACE}} -l app=metrics-service -f --tail=100
+      - 'echo "  ArgoCD:    https://argocd.127-0-0-1.sslip.io"'
     silent: false
 
   wait:ready:
@@ -332,53 +141,7 @@ tasks:
           - keycloak
           - metrics-service
         cmd: |
-          echo "=== {{.ITEM}} ===" && kubectl describe deployment/{{.ITEM}} -n {{.NAMESPACE}} | head -30
-    silent: false
-
-  # === Testing ===
-  test:
-    desc: Test all endpoints (fails if any unhealthy)
-    cmds:
-      - |
-        FAILED=0
-        for svc in registry auth keycloak metrics; do
-          case $svc in
-            registry) url="https://mcp-registry.127-0-0-1.sslip.io/health" ;;
-            auth)     url="https://mcp-auth.127-0-0-1.sslip.io/health" ;;
-            keycloak) url="https://keycloak.127-0-0-1.sslip.io/health/ready" ;;
-            metrics)  url="https://mcp-metrics.127-0-0-1.sslip.io/health" ;;
-          esac
-          printf "Testing %s... " "$svc"
-          if curl -sfk "$url" > /dev/null 2>&1; then
-            echo "✓"
-          else
-            echo "✗ FAILED"
-            FAILED=1
-          fi
-        done
-        echo ""
-        if [ $FAILED -eq 0 ]; then
-          echo "All services healthy!"
-        else
-          echo "Some services failed!"
-          exit 1
-        fi
-    silent: false
-
-  test:watch:
-    desc: Continuously test endpoints (watch mode)
-    watch: true
-    interval: 10s
-    cmds:
-      - task: test
-
-  test:curl:
-    desc: Quick curl test with verbose output
-    cmds:
-      - 'echo "Registry:" && curl -sk https://mcp-registry.127-0-0-1.sslip.io/health | jq . 2>/dev/null || echo "FAILED"'
-      - 'echo "Auth:" && curl -sk https://mcp-auth.127-0-0-1.sslip.io/health | jq . 2>/dev/null || echo "FAILED"'
-      - 'echo "Keycloak:" && curl -sk https://keycloak.127-0-0-1.sslip.io/health/ready | jq . 2>/dev/null || echo "FAILED"'
-      - 'echo "Metrics:" && curl -sk https://mcp-metrics.127-0-0-1.sslip.io/health | jq . 2>/dev/null || echo "FAILED"'
+          echo "=== {{.ITEM}} ===" && kubectl describe deployment/{{.ITEM}} -n {{.NAMESPACE}} | /usr/bin/head -30
     silent: false
 
   # === Cleanup ===
@@ -424,15 +187,11 @@ tasks:
     cmds:
       - kubectl config use-context k3d-{{.CLUSTER_NAME}}
 
-  # === Internal tasks (not shown in --list) ===
-  _ensure-cluster:
-    internal: true
+  # === GitOps ===
+  push:
+    desc: Commit and push changes (triggers ArgoCD sync)
     cmds:
-      - task: cluster:create
-    status:
-      - k3d cluster list | grep -q {{.CLUSTER_NAME}}
-
-  _ensure-namespace:
-    internal: true
-    cmds:
-      - kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+      - git add -A
+      - git commit -m "{{.CLI_ARGS}}" || echo "Nothing to commit"
+      - git push
+      - echo "✓ Pushed - ArgoCD will sync automatically"

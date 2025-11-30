@@ -1,0 +1,47 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Deploy homelab to k3d
+    deps:
+      - task: cluster:create
+    cmds:
+      - task: secrets:generate
+      - kubectl apply -f k8s/base/namespace.yaml
+      - task: secrets:apply
+      - kubectl apply -k k8s/base
+      - task: wait:ready
+      - task: test
+    sources:
+      - k8s/base/*.yaml
+
+  dry-run:
+    desc: Preview what would be deployed
+    cmds:
+      - kubectl apply -k k8s/base --dry-run=client -o yaml
+    silent: false
+
+  undeploy:
+    desc: Remove homelab from cluster
+    prompt: This will delete all resources in {{.NAMESPACE}}. Continue?
+    cmds:
+      - kubectl delete -k k8s/base --ignore-not-found
+    ignore_error: true
+
+  redeploy:
+    desc: Rebuild, push, and restart deployments
+    cmds:
+      - task: build:all
+      - kubectl rollout restart deployment -n {{.NAMESPACE}}
+      - task: wait:ready
+      - task: test
+
+  rebuild:
+    desc: Pull latest reference, rebuild all images, redeploy
+    cmds:
+      - echo "Pulling latest mcp-gateway-registry..."
+      - git -C {{.REFERENCE_DIR}} pull --ff-only
+      - task: build:all
+      - kubectl rollout restart deployment -n {{.NAMESPACE}}
+      - task: wait:ready
+      - task: test

@@ -1,0 +1,47 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Test all endpoints (fails if any unhealthy)
+    cmds:
+      - |
+        FAILED=0
+        for svc in registry auth keycloak metrics; do
+          case $svc in
+            registry) url="https://mcp-registry.127-0-0-1.sslip.io/health" ;;
+            auth)     url="https://mcp-auth.127-0-0-1.sslip.io/health" ;;
+            keycloak) url="https://keycloak.127-0-0-1.sslip.io/health/ready" ;;
+            metrics)  url="https://mcp-metrics.127-0-0-1.sslip.io/health" ;;
+          esac
+          printf "Testing %s... " "$svc"
+          if curl -sfk "$url" > /dev/null 2>&1; then
+            echo "✓"
+          else
+            echo "✗ FAILED"
+            FAILED=1
+          fi
+        done
+        echo ""
+        if [ $FAILED -eq 0 ]; then
+          echo "All services healthy!"
+        else
+          echo "Some services failed!"
+          exit 1
+        fi
+    silent: false
+
+  watch:
+    desc: Continuously test endpoints (watch mode)
+    watch: true
+    interval: 10s
+    cmds:
+      - task: test
+
+  curl:
+    desc: Quick curl test with verbose output
+    cmds:
+      - 'echo "Registry:" && curl -sk https://mcp-registry.127-0-0-1.sslip.io/health | jq . 2>/dev/null || echo "FAILED"'
+      - 'echo "Auth:" && curl -sk https://mcp-auth.127-0-0-1.sslip.io/health | jq . 2>/dev/null || echo "FAILED"'
+      - 'echo "Keycloak:" && curl -sk https://keycloak.127-0-0-1.sslip.io/health/ready | jq . 2>/dev/null || echo "FAILED"'
+      - 'echo "Metrics:" && curl -sk https://mcp-metrics.127-0-0-1.sslip.io/health | jq . 2>/dev/null || echo "FAILED"'
+    silent: false
