@@ -35,8 +35,23 @@ class OllamaService:
             response = await self.client.list()
             models = []
 
-            for model in response.get("models", []):
-                name = model.get("name", "")
+            # Handle both dict and ListResponse object formats
+            model_list = response.get("models", []) if isinstance(response, dict) else getattr(response, "models", [])
+
+            for model in model_list:
+                # Handle both dict and Model object formats
+                if isinstance(model, dict):
+                    name = model.get("name", "")
+                    details = model.get("details", {})
+                else:
+                    name = getattr(model, "name", "") or getattr(model, "model", "")
+                    details = getattr(model, "details", {}) or {}
+                    if not isinstance(details, dict):
+                        details = {"family": getattr(details, "family", "")}
+
+                if not name:
+                    continue
+
                 model_id = name.split(":")[0] if ":" in name else name
 
                 # Determine capabilities based on model family
@@ -54,7 +69,7 @@ class OllamaService:
                     model_id=name,
                     description=f"Local Ollama model: {name}",
                     capabilities=capabilities,
-                    context_length=model.get("details", {}).get("context_length", 8192),
+                    context_length=details.get("context_length", 8192) if isinstance(details, dict) else 8192,
                     is_default=(name == settings.default_model),
                 )
                 models.append(config)

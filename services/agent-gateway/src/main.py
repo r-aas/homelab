@@ -275,6 +275,11 @@ async def chat(
 
     try:
         response = await ollama_service.chat(model=model, messages=messages, tools=tools)
+        # Convert response object to dict if needed
+        if hasattr(response, "model_dump"):
+            return response.model_dump()
+        elif hasattr(response, "__dict__"):
+            return dict(response)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
