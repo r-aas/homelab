@@ -73,6 +73,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Add auth middleware if enabled
+if settings.auth_enabled:
+    from auth import AuthMiddleware
+
+    app.add_middleware(AuthMiddleware)
+
 
 # =============================================================================
 # Health & Discovery
@@ -91,6 +97,7 @@ async def health():
         "mcp_registry": "connected" if mcp_available else "unavailable",
         "agents": len(agent_service.list_agents()),
         "tracing": "enabled" if settings.tracing_enabled else "disabled",
+        "auth": "enabled" if settings.auth_enabled else "disabled",
     }
 
 

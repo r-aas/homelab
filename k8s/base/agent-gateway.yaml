@@ -42,6 +42,10 @@ spec:
               value: "http://jaeger:4318"
             - name: AGENT_GATEWAY_TRACING_ENABLED
               value: "true"
+            - name: AGENT_GATEWAY_AUTH_ENABLED
+              value: "false"  # TODO: Enable once Keycloak realm is configured
+            - name: AGENT_GATEWAY_AUTH_SERVER_URL
+              value: "http://auth-server:8888"
           volumeMounts:
             - name: data
               mountPath: /data

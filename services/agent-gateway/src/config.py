@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     tracing_enabled: bool = True
     service_name: str = "agent-gateway"
 
+    # Auth
+    auth_enabled: bool = True
+    auth_server_url: str = "http://auth-server:8888"
+    public_paths: str = "/health,/.well-known/agent.json,/docs,/openapi.json"
+
     model_config = {"env_prefix": "AGENT_GATEWAY_"}
 
 
